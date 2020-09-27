@@ -1,0 +1,114 @@
+REM >MakeHeader
+REM
+REM Copyright 2020, Stephen Fryatt (info@stevefryatt.org.uk)
+REM
+REM This file is part of SwiHeader:
+REM
+REM   http://www.stevefryatt.org.uk/software/
+REM
+REM Licensed under the EUPL, Version 1.2 only (the "Licence");
+REM You may not use this work except in compliance with the
+REM Licence.
+REM
+REM You may obtain a copy of the Licence at:
+REM
+REM   http://joinup.ec.europa.eu/software/page/eupl
+REM
+REM Unless required by applicable law or agreed to in
+REM writing, software distributed under the Licence is
+REM distributed on an "AS IS" basis, WITHOUT WARRANTIES
+REM OR CONDITIONS OF ANY KIND, either express or implied.
+REM
+REM See the Licence for the specific language governing
+REM permissions and limitations under the Licence.ile% = 0
+
+ON ERROR PRINT REPORT$;" at line ";ERL : IF file% <> 0 THEN CLOSE#file% : END ELSE END
+
+BufferLen% = 255
+DIM Buffer% BufferLen% - 1
+
+file% = OPENOUT("<Obey$Dir>.SwiHeader")
+IF file% = 0 THEN
+	PRINT "Failed to open output file"
+	END
+ENDIF
+
+PROCoutput_swis(file%, 0, &100)
+
+BPUT#file%, ""
+BPUT#file%, "        AddSWI  WriteI, &100"
+
+FOR base% = &8 TO &500
+	PROCoutput_swis(file%, base% * &40, &40)
+NEXT base%
+
+module% = 0
+instantiation% = 0
+
+REPEAT
+	SYS "XOS_Module",12,module%,instantiation% TO err%,module%,instantiation%,base% ;flags%
+
+	IF (instantiation% = 0) AND ((flags% AND 1) = 0) THEN
+		SYS "XOS_GenerateError", base% + base%!&10 TO name$
+
+		swi_base% = base%!&1C
+
+		IF swi_base% > 0 THEN PROCoutput_swis(file%, swi_base%, &40)
+	ENDIF
+UNTIL (flags% AND 1) <> 0
+
+CLOSE#file%
+
+END
+
+
+DEF PROCoutput_swis(file%, base%, count%)
+LOCAL swi%, name$, module$, pos%, last%
+
+FOR swi% = base% TO base% + count% - 1
+	SYS "OS_SWINumberToString", swi%, Buffer%, BufferLen% TO ,,length%
+	SYS "XOS_GenerateError", Buffer% TO name$
+
+	REM Catch the first SWI in a module.
+
+	pos% = INSTR(name$, "_")
+
+	IF pos% = 0 THEN ENDPROC
+	IF module$ <> LEFT$(name$, pos% - 1) THEN
+		module$ = LEFT$(name$, pos% - 1)
+
+		BPUT#file%, ""
+		BPUT#file%, "SWIClass SETS  """ + module$ + """"
+	ENDIF
+
+	REM Output the SWI entry.
+
+	name$ = MID$(name$, LEN(module$) + 2)
+
+	CASE TRUE OF
+
+	REM There's no name!
+	WHEN name$ = ""
+
+	REM OS SWIs which aren't defined.
+	WHEN name$ = "Undefined"
+
+	REM The name is just the SWI index number, with a special case to
+	REM allow for VAL() returning zero for all non-numeric strings.
+	WHEN (VAL(name$) = (swi% - base%)) AND ((name$ = "0") OR (swi% <> base%))
+
+	REM Territory has a load of ReservedN SWIs,
+	WHEN (module$ = "Territory") AND (LEFT$(name$, 8) = "Reserved")
+
+	OTHERWISE
+		IF (last% + 1) <> swi% THEN
+			BPUT#file%, ""
+			BPUT#file%, "        ^      &" + STR$~(swi%)
+		ENDIF
+		last% = swi%
+
+		BPUT#file%, "        AddSWI " + LEFT$(name$ + STRING$(32, " "), 32) + "; &" + STR$~(swi%)
+	ENDCASE
+NEXT swi%
+
+ENDPROC
