@@ -65,6 +65,7 @@ MANSRC := Source
 MANSPR := ManSprite
 LICSRC := Licence
 SWINAMES := AsmSWINames
+TEMPLATE := HeadTempl
 
 # Includes and libraries.
 
@@ -107,7 +108,7 @@ SRCS := $(addprefix $(SRCDIR)/, $(SRCS))
 
 $(OUTDIR)/$(RUNIMAGE): $(OUTDIR) $(SRCS)
 	$(TOKENIZE) $(TOKFLAGS) $(firstword $(SRCS)) -link -out $(OUTDIR)/$(RUNIMAGE) \
-		$(SWIDEFS) -path $(LIBPATHS) -define 'OutputFilename$$=$(SWINAMES)'
+		$(SWIDEFS) -path $(LIBPATHS) -define 'OutputFilename$$=$(SWINAMES)' -define 'TemplateFilename$$=$(TEMPLATE)'
 
 # Create a folder to take the output.
 
@@ -131,7 +132,7 @@ $(OUTDIR)/$(LICENCE): $(LICSRC) $(OUTDIR)
 
 release: clean all
 	$(RM) ../$(ZIPFILE)
-	(cd $(OUTDIR) ; $(ZIP) $(ZIPFLAGS) ../../$(ZIPFILE) $(README) $(LICENCE) $(RUNIMAGE))
+	(cd $(OUTDIR) ; $(ZIP) $(ZIPFLAGS) ../../$(ZIPFILE) $(README) $(LICENCE) $(TEMPLATE) $(SWINAMES) $(RUNIMAGE))
 	$(RM) ../$(SRCZIPFILE)
 	$(ZIP) $(SRCZIPFLAGS) ../$(SRCZIPFILE) $(SRCDIR) $(OUTDIR) $(MANUAL) Makefile
 

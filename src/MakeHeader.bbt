@@ -50,6 +50,14 @@ IF file% = 0 THEN
 	END
 ENDIF
 
+REM Copy over the file header template, containing the copyright info,
+REM fixed macro definitions, and anything else that isn't generated
+REM by scanning through the SWI names on the system.
+TemplateFilename$ = "HeadTempl"
+PROCoutput_template(file%, OutputPathname$ + TemplateFilename$)
+
+
+
 PROCoutput_swis(file%, 0, &100)
 
 BPUT#file%, ""
@@ -78,6 +86,37 @@ CLOSE#file%
 SYS "OS_File", 18, Filename$, &FFF
 
 END
+
+
+REM Copy the contents of a template file into the output file.
+REM
+REM \param file%	The handle of the output file.
+REM \param header$	The name of the template file to be copied.
+DEF PROCoutput_template(file%, header$)
+LOCAL handle%, line$
+LOCAL ERROR
+
+REM Do nothing if there's no valid output handle.
+IF file% = 0 THEN ENDPROC
+
+REM Open the template file for reading.
+handle% = OPENIN(header$)
+IF handle% = 0 THEN ENDPROC
+
+REM On error, close the template file and leave the caller to
+REM sort out the output file.
+ON ERROR LOCAL CLOSE#handle% : ENDPROC
+
+REM Copy the template file into the output file, line by line.
+WHILE NOT EOF#handle%
+	line$ = GET$#handle%
+	BPUT#file%, line$
+ENDWHILE
+
+REM Close the template file.
+CLOSE#handle%
+ENDPROC
+
 
 
 DEF PROCoutput_swis(file%, base%, count%)
