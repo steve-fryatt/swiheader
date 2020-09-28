@@ -15,12 +15,36 @@ REM
 REM See the License for the specific language governing permissions and
 REM limitations under the License.
 
-ON ERROR PRINT REPORT$;" at line ";ERL : IF file% <> 0 THEN CLOSE#file% : END ELSE END
+REM Generate a set of ObjASM or AsASM SWI definition headers, based on
+REM the AddSWI macro from the RISC OS sources.
 
+REM The handle of the file to be written to.
+FileHandle% = 0
+
+REM A global error handler to tidy up the files, report and exit.
+ON ERROR PROCclose(FileHandle%) : PRINT REPORT$;" at line ";ERL : END
+
+REM A buffer to hold looked-up SWI names from the OS.
 BufferLen% = 255
 DIM Buffer% BufferLen% - 1
 
-file% = OPENOUT("<Obey$Dir>.SwiHeader")
+REM The file to write the header to. The path is extracted from the CLI
+REM parameters passed to the program, so that we write the output file
+REM to the same folder as the program itself.
+REM
+REM OutputFilename$ can be replaced by the GCCSDK Makefile.
+OutputFilename$ = "SwiHeader"
+OutputPathname$ = FNextract_environment
+
+IF OutputPathname$ = "" THEN
+	PRINT "Unable to identify location of BASIC program."
+	END
+ENDIF
+
+Filename$ = OutputPathname$ + OutputFilename$
+
+REM Open a file to write to.
+file% = OPENOUT(Filename$)
 IF file% = 0 THEN
 	PRINT "Failed to open output file"
 	END
@@ -51,6 +75,7 @@ REPEAT
 UNTIL (flags% AND 1) <> 0
 
 CLOSE#file%
+SYS "OS_File", 18, Filename$, &FFF
 
 END
 
@@ -105,3 +130,83 @@ FOR swi% = base% TO base% + count% - 1
 NEXT swi%
 
 ENDPROC
+
+
+REM Close the file associated with the supplied handle, if the handle
+REM is non-zero, and update the supplied variable to be zero.
+REM
+REM \param file%	The file handle to close and update.
+DEF PROCclose(RETURN file%)
+IF file% <> 0 THEN CLOSE#file%
+file% = 0
+ENDPROC
+
+
+REM Extract the folder in which the program is being run from the
+REM CLI used to launch BASIC.
+REM
+REM \return		The folder path with trailing ., or "".
+DEF FNextract_environment
+LOCAL environment$, path$, inset%, next%
+
+REM Read the command line used to call the program.
+
+SYS "OS_GetEnv" TO environment$
+
+REM We're assuming that we're being run by a double-click, and so the
+REM command line will start "BASIC -quit ...". If not, we don't go
+REM any further.
+
+IF FNextract_next_environment_parameter(environment$) <> "BASIC" THEN =""
+IF FNextract_next_environment_parameter(environment$) <> "-quit" THEN =""
+
+REM The filename of our program should be the next parameter on the line.
+
+path$ = FNextract_next_environment_parameter(environment$)
+IF path$ = "" THEN =""
+
+REM Find the last . in the line, and remove the leafname. There should be
+REM at least one . in the line, otherwise we give up.
+
+inset% = 0
+
+REPEAT
+	next% = INSTR(path$, ".", inset%)
+	IF next% <> 0 THEN inset% = next% + 1
+UNTIL next% = 0
+
+IF inset% = 0 THEN =""
+
+=LEFT$(path$, inset% - 1)
+
+
+REM Given a CLI command, remove the next parameter chunk from the start
+REM of the line and return it, updating the supplied command at the
+REM same time.
+REM
+REM \param environment$	The CLI tail to process and update.
+REM \return		The next parameter, or "" for none.
+DEF FNextract_next_environment_parameter(RETURN environment$)
+LOCAL parameter$, quoted%
+
+quoted% = FALSE
+
+REM Remove any leading spaces.
+
+WHILE (LEN(environment$) > 0) AND (LEFT$(environment$, 1) = " ")
+	environment$ = MID$(environment$, 2)
+ENDWHILE
+
+REM Extract the next parameter from the line.
+
+WHILE (LEN(environment$) > 0) AND ((LEFT$(environment$, 1) <> " ") OR quoted%)
+	IF LEFT$(environment$, 1) = """" THEN
+		quoted% = NOT quoted%
+	ELSE
+		parameter$ += LEFT$(environment$, 1)
+	ENDIF
+
+	environment$ = MID$(environment$, 2)
+ENDWHILE
+
+=parameter$

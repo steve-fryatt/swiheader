@@ -64,7 +64,7 @@ RUNIMAGE := MakeHeader,ffb
 MANSRC := Source
 MANSPR := ManSprite
 LICSRC := Licence
-SWINAMES := TokenizeSWIs.h
+SWINAMES := AsmSWINames
 
 # Includes and libraries.
 
@@ -105,9 +105,9 @@ program: $(OUTDIR)/$(RUNIMAGE)
 
 SRCS := $(addprefix $(SRCDIR)/, $(SRCS))
 
-$(OUTDIR)/$(RUNIMAGE): $(SRCS) $(OUTDIR)
+$(OUTDIR)/$(RUNIMAGE): $(OUTDIR) $(SRCS)
 	$(TOKENIZE) $(TOKFLAGS) $(firstword $(SRCS)) -link -out $(OUTDIR)/$(RUNIMAGE) \
-		$(SWIDEFS) -path $(LIBPATHS) -define 'build_date$$=$(BUILD_DATE)' -define 'build_version$$=$(VERSION)'
+		$(SWIDEFS) -path $(LIBPATHS) -define 'OutputFilename$$=$(SWINAMES)'
 
 # Create a folder to take the output.
 
@@ -143,9 +143,7 @@ backup:
 	$(ZIP) $(BUZIPFLAGS) ../$(BUZIPFILE) *
 
 
-# Install the finished version in the SFTools folder, ready for use.  It's not a
-# striaghtforward copy, as we need to strip the file extensions that are in build/
-# for the benefit of the RISC OS target.
+# Install the finished version in the GCCSDK environment, ready for use.
 
 install: clean all
 	$(INSTALL) $(OUTDIR)/$(SWINAMES) $(GCCSDK_INSTALL_ENV)/include/$(SWINAMES)
