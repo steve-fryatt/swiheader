@@ -44,8 +44,8 @@ ENDIF
 Filename$ = OutputPathname$ + OutputFilename$
 
 REM Open a file to write to.
-file% = OPENOUT(Filename$)
-IF file% = 0 THEN
+File% = OPENOUT(Filename$)
+IF File% = 0 THEN
 	PRINT "Failed to open output file"
 	END
 ENDIF
@@ -54,35 +54,54 @@ REM Copy over the file header template, containing the copyright info,
 REM fixed macro definitions, and anything else that isn't generated
 REM by scanning through the SWI names on the system.
 TemplateFilename$ = "HeadTempl"
-PROCoutput_template(file%, OutputPathname$ + TemplateFilename$)
+PROCoutput_template(File%, OutputPathname$ + TemplateFilename$)
 
+REM Set some names for the different groups of SWIs.
+DIM Group$(4)
+Group$() = "Operating System", "Operating System Extension Module", "Third Party Resident Application", "User Application"
 
+REM Output the SWIs from the OS block. These are in the range &0 to &FF,
+REM followed by a blanker OS_WriteI definition covering the range &100 to &1FF.
+PROCwrite_spaced_line(File%, "; " + Group$(0) + " SWIs")
 
-PROCoutput_swis(file%, 0, &100)
+PROCoutput_swis(File%, 0, &100)
 
-BPUT#file%, ""
-BPUT#file%, "        AddSWI  WriteI, &100"
+PROCwrite_spaced_line(File%, "        AddSWI WriteI, &100")
 
-FOR base% = &8 TO &500
-	PROCoutput_swis(file%, base% * &40, &40)
-NEXT base%
+REM Output any more SWIs from OS modules.
+PROCwrite_spaced_line(File%, "; " + Group$(0) + " SWI Chunks.")
 
-module% = 0
-instantiation% = 0
+FOR Base% = &8 TO &7FF
+	PROCoutput_swis(File%, Base% * &40, &40)
+NEXT Base%
+
+REM Step through the Extension Module, Third Party Module and
+REM User Module ranges.
+FOR Group% = 1 TO 3
+	PROCwrite_spaced_line(File%, "; " + Group$(Group%) + " SWI Chunks.")
+
+	FOR Base% = &0 TO &7FF
+		PROCoutput_swis(File%, (Group% * &40000) + (Base% * &40), &40)
+	NEXT Base%
+NEXT Group%
+
+REM Run through the module area, picking up any modules whose SWI
+REM base falls outside of the areas above.
+PROCwrite_spaced_line(File%, "; And the rest...")
+
+Module% = 0
+Instantiation% = 0
 
 REPEAT
-	SYS "XOS_Module",12,module%,instantiation% TO err%,module%,instantiation%,base% ;flags%
+	SYS "XOS_Module",12, Module%, Instantiation% TO ,Module%, Instantiation%, Header% ;Flags%
 
-	IF (instantiation% = 0) AND ((flags% AND 1) = 0) THEN
-		SYS "XOS_GenerateError", base% + base%!&10 TO name$
-
-		swi_base% = base%!&1C
-
-		IF swi_base% > 0 THEN PROCoutput_swis(file%, swi_base%, &40)
+	IF (Instantiation% = 0) AND ((Flags% AND 1) = 0) THEN
+		IF Header%!&1C >= &C0000 THEN PROCoutput_swis(File%, Header%!&1C, &40)
 	ENDIF
-UNTIL (flags% AND 1) <> 0
+UNTIL (Flags% AND 1) <> 0
 
-CLOSE#file%
+REM Close the file and set its type to Text.
+CLOSE#File%
 SYS "OS_File", 18, Filename$, &FFF
 
 END
@@ -118,29 +137,37 @@ CLOSE#handle%
 ENDPROC
 
 
-
+REM Write a set of consecutive SWI names to the output file, starting
+REM at a base SWI number and checking a specified number of calls.
+REM
+REM \param file%	The handle of the output file.
+REM \param base%	The base SWI number to count from.
+REM \param count%	The number of SWIs to check.
 DEF PROCoutput_swis(file%, base%, count%)
 LOCAL swi%, name$, module$, pos%, last%
 
+module$ = ""
+
 FOR swi% = base% TO base% + count% - 1
-	SYS "OS_SWINumberToString", swi%, Buffer%, BufferLen% TO ,,length%
+	SYS "OS_SWINumberToString", swi%, Buffer%, BufferLen%
 	SYS "XOS_GenerateError", Buffer% TO name$
 
-	REM Catch the first SWI in a module.
+	REM Catch the first SWI in a module, and change the value of
+	REM the SWIClass global variable.
 
 	pos% = INSTR(name$, "_")
 
 	IF pos% = 0 THEN ENDPROC
 	IF module$ <> LEFT$(name$, pos% - 1) THEN
 		module$ = LEFT$(name$, pos% - 1)
-
-		BPUT#file%, ""
-		BPUT#file%, "SWIClass SETS  """ + module$ + """"
+		PROCwrite_spaced_line(file%, "SWIClass SETS  """ + module$ + """")
 	ENDIF
 
-	REM Output the SWI entry.
+	REM Extract the name of the SWI, which is the name following the underscore.
 
-	name$ = MID$(name$, LEN(module$) + 2)
+	name$ = MID$(name$, pos% + 1)
+
+	REM Before outputting the SWI, exclude some special cases.
 
 	CASE TRUE OF
 
@@ -150,24 +177,31 @@ FOR swi% = base% TO base% + count% - 1
 	REM OS SWIs which aren't defined.
 	WHEN name$ = "Undefined"
 
-	REM The name is just the SWI index number, with a special case to
-	REM allow for VAL() returning zero for all non-numeric strings.
+	REM The name is just the SWI index number (eg. "ModSwi_1"). We need a special
+	REM case to allow for VAL() returning zero for all non-numeric strings.
 	WHEN (VAL(name$) = (swi% - base%)) AND ((name$ = "0") OR (swi% <> base%))
 
-	REM Territory has a load of ReservedN SWIs,
+	REM Territory has a load of ReservedN SWIs, which we don't include.
 	WHEN (module$ = "Territory") AND (LEFT$(name$, 8) = "Reserved")
 
+	REM If all of the above tests were OK, add the SWI to the file.
 	OTHERWISE
-		IF (last% + 1) <> swi% THEN
-			BPUT#file%, ""
-			BPUT#file%, "        ^      &" + STR$~(swi%)
-		ENDIF
+		IF (last% + 1) <> swi% THEN PROCwrite_spaced_line(file%, "        ^      &" + STR$~(swi%))
 		last% = swi%
-
 		BPUT#file%, "        AddSWI " + LEFT$(name$ + STRING$(32, " "), 32) + "; &" + STR$~(swi%)
 	ENDCASE
 NEXT swi%
+ENDPROC
 
+
+REM Write a line to the output file, with a single blank line above it.
+REM
+REM \param file%	The file handle to write to.
+REM \param line$	The line to write.
+DEF PROCwrite_spaced_line(file%, line$)
+IF file% = 0 THEN ENDPROC
+BPUT#file%, ""
+BPUT#file%, line$
 ENDPROC
 
 
