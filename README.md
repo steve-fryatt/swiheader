@@ -9,7 +9,7 @@ Introduction
 
 SWI Headers can create and install an ObjASM or AsASM header file containing SWI name definitions, using the modules present on a RISC OS system.
 
-As supplied, it contains a pre-built file with the SWIs necessary to build the associated projects.
+As supplied, it contains a pre-built file with the SWIs necessary to build the associated projects. In addition, with access to a RISC OS system, the MakeHeader program can scrape the SWI details from active modules and produce a full header.
 
 
 Installation
@@ -21,7 +21,7 @@ To build MakeHeaders and install the supplied headers file, use
 
 	make install
 
-from the root folder of the project. This will tokenise the MakeHeaders program, and also copy a pre-built header file with the SWIs necessary for other projects into to the GCCSDK environment.
+from the root folder of the project. This will tokenise the MakeHeaders program, and also copy a pre-built header file with the SWIs necessary for other projects into to the GCCSDK environment. This is all that is required in order to use the headers for building other projects.
 
 To use MakeHeader to generate a new list of SWI names, it will be necessary to have access to a RISC OS system. If the Linux build folder can be accessed from RISC OS (eg. via Sunfish, HostFS or similar), run MakeHeader by double-clicking on it in the build folder -- it will update the AsmSWINames file to contain details of the SWIs present on the machine.
 
