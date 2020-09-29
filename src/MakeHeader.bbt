@@ -184,6 +184,9 @@ FOR swi% = base% TO base% + count% - 1
 	REM Territory has a load of ReservedN SWIs, which we don't include.
 	WHEN (module$ = "Territory") AND (LEFT$(name$, 8) = "Reserved")
 
+	REM Toolbox uses NULL as an undefined SWI name.
+	WHEN name$ = "NULL"
+
 	REM If all of the above tests were OK, add the SWI to the file.
 	OTHERWISE
 		IF (last% + 1) <> swi% THEN PROCwrite_spaced_line(file%, "        ^      &" + STR$~(swi%))
