@@ -223,23 +223,24 @@ REM CLI used to launch BASIC.
 REM
 REM \return		The folder path with trailing ., or "".
 DEF FNextract_environment
-LOCAL environment$, path$, inset%, next%
+LOCAL environment%, buffer%, buffer_size%, basic$, path$, inset%, next%
+
+buffer_size% = 1024
+DIM buffer% buffer_size%
 
 REM Read the command line used to call the program.
 
-SYS "OS_GetEnv" TO environment$
+SYS "OS_GetEnv" TO environment%
+SYS "OS_ReadArgs", ",load=quit/K", environment%, buffer%, buffer_size%
+
+SYS "XOS_GenerateError", buffer%!0 TO basic$
+SYS "XOS_GenerateError", buffer%!4 TO path$
 
 REM We're assuming that we're being run by a double-click, and so the
 REM command line will start "BASIC -quit ...". If not, we don't go
 REM any further.
 
-IF FNextract_next_environment_parameter(environment$) <> "BASIC" THEN =""
-IF FNextract_next_environment_parameter(environment$) <> "-quit" THEN =""
-
-REM The filename of our program should be the next parameter on the line.
-
-path$ = FNextract_next_environment_parameter(environment$)
-IF path$ = "" THEN =""
+IF basic$ <> "BASIC" OR path$ = "" THEN =""
 
 REM Find the last . in the line, and remove the leafname. There should be
 REM at least one . in the line, otherwise we give up.
@@ -254,35 +255,3 @@ UNTIL next% = 0
 IF inset% = 0 THEN =""
 
 =LEFT$(path$, inset% - 1)
-
-
-REM Given a CLI command, remove the next parameter chunk from the start
-REM of the line and return it, updating the supplied command at the
-REM same time.
-REM
-REM \param environment$	The CLI tail to process and update.
-REM \return		The next parameter, or "" for none.
-DEF FNextract_next_environment_parameter(RETURN environment$)
-LOCAL parameter$, quoted%
-
-quoted% = FALSE
-
-REM Remove any leading spaces.
-
-WHILE (LEN(environment$) > 0) AND (LEFT$(environment$, 1) = " ")
-	environment$ = MID$(environment$, 2)
-ENDWHILE
-
-REM Extract the next parameter from the line.
-
-WHILE (LEN(environment$) > 0) AND ((LEFT$(environment$, 1) <> " ") OR quoted%)
-	IF LEFT$(environment$, 1) = """" THEN
-		quoted% = NOT quoted%
-	ELSE
-		parameter$ += LEFT$(environment$, 1)
-	ENDIF
-
-	environment$ = MID$(environment$, 2)
-ENDWHILE
-
-=parameter$
